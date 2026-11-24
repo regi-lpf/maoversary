@@ -484,6 +484,7 @@
 
         <div class="card-actions">
           <div class="actions-left">
+            <button type="button" class="btn btn-secondary" id="copy-card-btn">Copiar Card (PNG)</button>
             <button type="button" class="btn btn-secondary" id="copy-btn">Copiar Citação</button>
             <button type="button" class="btn btn-secondary" id="next-quote-btn" style="display: none;">Outra desta data</button>
           </div>
@@ -528,6 +529,7 @@
     const form = document.getElementById("birthday-form");
     const randomBtn = document.getElementById("random-btn");
     const copyBtn = document.getElementById("copy-btn");
+    const copyCardBtn = document.getElementById("copy-card-btn");
     const nextQuoteBtn = document.getElementById("next-quote-btn");
     const copyToast = document.getElementById("copy-toast");
 
@@ -610,12 +612,257 @@
       displayQuoteAt(randomIdx, day, month);
     }
 
-    function showCopyToast() {
+    function showCopyToast(msg) {
+      copyToast.textContent = msg || "Copiado para a área de transferência!";
       copyToast.classList.add("visible");
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
         copyToast.classList.remove("visible");
-      }, 2400);
+      }, 2800);
+    }
+
+    function wrapCanvasText(ctx, text, maxWidth) {
+      const paragraphs = text.split("\n").map((p) => p.trim()).filter(Boolean);
+      const lines = [];
+      paragraphs.forEach((para, pIdx) => {
+        const words = para.split(/\s+/);
+        let current = "";
+        words.forEach((word) => {
+          const test = current ? current + " " + word : word;
+          if (ctx.measureText(test).width > maxWidth && current) {
+            lines.push(current);
+            current = word;
+          } else {
+            current = test;
+          }
+        });
+        if (current) lines.push(current);
+        if (pIdx < paragraphs.length - 1) lines.push("");
+      });
+      return lines;
+    }
+
+    function renderCardToCanvas(quote, day, month) {
+      const width = 1080;
+      const padX = 76;
+      const cardX = 48;
+      const cardW = width - cardX * 2;
+      const innerX = cardX + 44;
+      const innerW = cardW - 88;
+      const monthName = MONTHS[month - 1].name;
+      const dateStr = `${String(day).padStart(2, "0")} de ${monthName}`.toUpperCase();
+
+      const tempCanvas = document.createElement("canvas");
+      const tctx = tempCanvas.getContext("2d");
+
+      // Measure quote lines
+      const quoteFontSize = quote.text.length > 650 ? 28 : (quote.text.length > 350 ? 32 : 36);
+      const quoteLineH = Math.round(quoteFontSize * 1.55);
+      tctx.font = `${quoteFontSize}px Georgia, "Times New Roman", serif`;
+      const quoteLines = wrapCanvasText(tctx, quote.text, innerW);
+
+      // Measure source lines
+      tctx.font = 'italic 24px Georgia, "Times New Roman", serif';
+      const sourceLines = wrapCanvasText(tctx, `— ${quote.source}`, innerW - 130);
+
+      // Measure chapter lines
+      tctx.font = '800 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const chapterLines = wrapCanvasText(tctx, `★  ${quote.chapter}`, innerW);
+
+      const headerH = 210;
+      const metaH = 74;
+      const chapterH = chapterLines.length * 32 + 24;
+      const bodyH = quoteLines.reduce((acc, l) => acc + (l === "" ? 18 : quoteLineH), 0) + 28;
+      const footerCardH = Math.max(100, sourceLines.length * 32 + 36);
+      const bottomPad = 56;
+      const height = Math.max(960, headerH + 40 + metaH + chapterH + bodyH + footerCardH + bottomPad + 48);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      // Background paper
+      ctx.fillStyle = "#e8dcc0";
+      ctx.fillRect(0, 0, width, height);
+
+      // Outer pamphlet frame
+      ctx.fillStyle = "#f6eed9";
+      ctx.fillRect(24, 24, width - 48, height - 48);
+      ctx.strokeStyle = "#7f1d1d";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(24, 24, width - 48, height - 48);
+
+      // Red header banner
+      const grad = ctx.createLinearGradient(24, 24, width - 24, headerH);
+      grad.addColorStop(0, "#dc2626");
+      grad.addColorStop(0.55, "#b91c1c");
+      grad.addColorStop(1, "#7f1d1d");
+      ctx.fillStyle = grad;
+      ctx.fillRect(24, 24, width - 48, headerH - 24);
+
+      // Gold rays in header
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(24, 24, width - 48, headerH - 24);
+      ctx.clip();
+      ctx.fillStyle = "rgba(253, 224, 71, 0.13)";
+      const cx = width / 2;
+      const cy = headerH;
+      for (let a = -160; a <= -20; a += 22) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        const r = 700;
+        ctx.lineTo(cx + Math.cos((a * Math.PI) / 180) * r, cy + Math.sin((a * Math.PI) / 180) * r);
+        ctx.lineTo(cx + Math.cos(((a + 10) * Math.PI) / 180) * r, cy + Math.sin(((a + 10) * Math.PI) / 180) * r);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Gold divider line
+      ctx.fillStyle = "#eab308";
+      ctx.fillRect(24, headerH, width - 48, 6);
+
+      // Header star + title
+      ctx.fillStyle = "#fde047";
+      ctx.font = '700 28px Georgia, "Times New Roman", serif';
+      ctx.textAlign = "center";
+      ctx.fillText("★", width / 2, 74);
+
+      ctx.fillStyle = "#fbf7eb";
+      ctx.font = '700 34px Georgia, "Times New Roman", serif';
+      ctx.fillText("CITAÇÕES DO PRESIDENTE MAO ZEDONG", width / 2, 124);
+
+      ctx.fillStyle = "#fde047";
+      ctx.font = '700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText("EDIÇÃO POPULAR • LIVRO VERMELHO", width / 2, 164);
+
+      // Inner quote card
+      const cardY = headerH + 40;
+      const cardH = height - cardY - 64;
+      ctx.fillStyle = "#b91c1c";
+      ctx.fillRect(cardX + 10, cardY + 10, cardW, cardH);
+      ctx.fillStyle = "#fffdf7";
+      ctx.fillRect(cardX, cardY, cardW, cardH);
+      ctx.strokeStyle = "#292524";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+      // Date badge
+      ctx.textAlign = "left";
+      ctx.font = '800 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const badgeW = ctx.measureText(dateStr).width + 36;
+      ctx.fillStyle = "#b91c1c";
+      ctx.fillRect(innerX, cardY + 34, badgeW, 40);
+      ctx.fillStyle = "#fbf7eb";
+      ctx.fillText(dateStr, innerX + 18, cardY + 61);
+
+      // Quote number on right
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#7f1d1d";
+      ctx.font = '800 19px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(`CITAÇÃO Nº ${quote.id} / 427`, cardX + cardW - 44, cardY + 61);
+
+      // Red separator under meta
+      ctx.fillStyle = "#b91c1c";
+      ctx.fillRect(innerX, cardY + 92, innerW, 3);
+
+      // Chapter
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#b91c1c";
+      ctx.font = '800 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      let curY = cardY + 134;
+      chapterLines.forEach((line) => {
+        ctx.fillText(line, innerX, curY);
+        curY += 32;
+      });
+      curY += 14;
+
+      // Quote body
+      ctx.fillStyle = "#1c1917";
+      ctx.font = `${quoteFontSize}px Georgia, "Times New Roman", serif`;
+      quoteLines.forEach((line) => {
+        if (line === "") {
+          curY += 18;
+        } else {
+          ctx.fillText(line, innerX, curY);
+          curY += quoteLineH;
+        }
+      });
+
+      // Source separator
+      const footerY = cardY + cardH - footerCardH - 22;
+      ctx.fillStyle = "rgba(41, 37, 36, 0.2)";
+      ctx.fillRect(innerX, footerY, innerW, 2);
+
+      // Source text
+      ctx.fillStyle = "#57534e";
+      ctx.font = 'italic 24px Georgia, "Times New Roman", serif';
+      let srcY = footerY + 38;
+      sourceLines.forEach((line) => {
+        ctx.fillText(line, innerX, srcY);
+        srcY += 32;
+      });
+
+      // Red seal stamp
+      const sealX = cardX + cardW - 128;
+      const sealY = footerY + 20;
+      ctx.save();
+      ctx.translate(sealX + 42, sealY + 42);
+      ctx.rotate(-0.07);
+      ctx.fillStyle = "rgba(185, 28, 28, 0.05)";
+      ctx.fillRect(-42, -42, 84, 84);
+      ctx.strokeStyle = "#b91c1c";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(-42, -42, 84, 84);
+      ctx.fillStyle = "#b91c1c";
+      ctx.textAlign = "center";
+      ctx.font = '900 26px serif';
+      ctx.fillText("語錄", 0, -2);
+      ctx.font = '900 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(quote.year ? String(quote.year) : "MAO", 0, 26);
+      ctx.restore();
+
+      return canvas;
+    }
+
+    function downloadCanvasPng(canvas, day, month) {
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `livro_vermelho_${String(day).padStart(2, "0")}_${String(month).padStart(2, "0")}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showCopyToast("Imagem do card baixada em PNG!");
+    }
+
+    function copyCardAsImage() {
+      const quote = currentList[currentIndex];
+      if (!quote) return;
+      const day = Number(daySelect.value);
+      const month = Number(monthSelect.value);
+      const canvas = renderCardToCanvas(quote, day, month);
+
+      if (navigator.clipboard && window.ClipboardItem && canvas.toBlob) {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            downloadCanvasPng(canvas, day, month);
+            return;
+          }
+          navigator.clipboard
+            .write([new ClipboardItem({ "image/png": blob })])
+            .then(() => {
+              showCopyToast("Imagem do card copiada para a área de transferência!");
+            })
+            .catch(() => {
+              downloadCanvasPng(canvas, day, month);
+            });
+        }, "image/png");
+      } else {
+        downloadCanvasPng(canvas, day, month);
+      }
     }
 
     function copyCurrentQuote() {
@@ -681,6 +928,7 @@
     });
 
     copyBtn.addEventListener("click", copyCurrentQuote);
+    copyCardBtn.addEventListener("click", copyCardAsImage);
 
     (function init() {
       populateMonths();
